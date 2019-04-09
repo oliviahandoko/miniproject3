@@ -1,0 +1,174 @@
+---
+title: "Exploring Macleish Field Station"
+author: "Marlene Jackson and Olivia Handoko"
+output: 
+  html_document:
+    theme: lumen 
+    code_folding: hide
+
+
+---
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(tidyverse)
+library(sf)
+library(macleish)
+library(rgdal)
+library(rgeos)
+library(proj4)
+library(udunits2)
+library(leaflet)
+library(lwgeom)
+library(maps)
+library(mapview)
+library(prettydoc)
+```
+\
+\
+
+
+
+Hiking is a pastime enjoyed by people all over the world. It allows us to relax, connect with nature, and appreciate the beauty of a screenless world. Furthermore, hiking is an affordable activity that can be enjoyed by people of all backgrounds and ages, and something that can be enjoyed by whole families or groups of friends - all you need is a good pair of boots and some trail mix!
+	Unfortunately, hiking is not accessible to everyone - not yet. For the elderly, younger children, or people with disabilities that require equipment such as canes, longer hikes with steeper elevations can be a barrier to enjoying the peace and beauty of nature - something that everyone should be able to enjoy.
+	There are a wealth of reasons for families in particular to want to take advantage of hiking trails. For example, outdoor exercise is important for children’s health and growth, and stepping over the tree roots or climbing over the rocks present in a hiking trail will help develop their balance and agility. Hiking is also a chance to observe all kinds of wildlife, which is particularly important for children that live in more urban areas. Similarly, a hiking trail is a good place for parents to teach their children to respect the environment and the animals within it. Jessica Culverhouse, of the National Parks and Recreation Department, emphasises the importance of families taking “a break from [their] devices and [connecting] with each other and the outdoors… instead”.
+	Because we want everyone to be able to enjoy the trails at Macleish, regardless of age and personal physical ability, we have designed a trail rating system to separate easier and shorter paths from longer and more difficult ones, so everyone, whole families included, can choose a path that suits their own ability.
+	The changes we propose will be easy to implement - all that is required is one sign per path at Macleish, to be placed at the start of a trail and inscribed with its rating in terms of elevation and length. This sign could be affixed to a tree, or attached to a post and driven into the ground. Ten custom aluminum signs, each three feet wide and two feet high, could be made for as little as 560 dollars - or Macleish could make its own out of wood and paint for a cheaper option. 
+	The length and elevation change will be posted on each sign in meters, with a final rating based on difficulty also posted - either “Easy”, “Medium”, or “Hard”. 
+
+
+```{r message=FALSE, echo=FALSE, warning=FALSE}
+#trail length
+trails <-macleish_layers[["trails"]] %>%
+mutate(computed_length = st_length(geometry)) %>%
+group_by(name) %>%
+summarize(total_length = sum(computed_length)) %>%
+arrange(total_length) 
+
+#streams
+streams <- macleish_layers[["streams"]]
+
+#trails intersecting trails 
+trailintersect <- st_intersection(macleish_layers[["trails"]],trails)
+
+#trail crossing stream
+#stream_trail_cross<- st_crosses(macleish_layers[["streams"]], trails)
+
+#trail within boundaries 
+trailinMac<-st_intersection(macleish_layers[["boundary"]],trails)
+
+#stream within boundaries 
+#streaminMac <- st_intersection(macleish_layers[["boundary"]], streams)
+
+#Trail Kiosk cause you wanna know where you at
+landmarks <- macleish_layers[["landmarks"]] %>%
+  filter(Label%in% c('Trail Kiosk'))
+
+#High point of Macleish
+high_point <- macleish_layers[["landmarks"]] %>%
+  filter(Label%in% c("High Point = 938ft"))
+#low point of Macleish 
+low_point <- macleish_layers[["landmarks"]] %>%
+  filter(Label%in% c("Low Point = 608ft"))
+```
+
+
+```{r message=FALSE, warning=FALSE}
+#pinpointing where intersects 
+
+intersection <- tribble(
+~point, ~lat, ~lon,
+"Eastern Loop & Easy Out Intersection", 42.45638688103, -72.680402551794,
+"Popular Hill Rd & Driveway Intersection", 42.448780437456, -72.6808781184845,
+"Popular Hill Rd & Entry Trail Intersection", 42.4478292597841, -72.6808677547963,
+"Western Loop & Vernal Pool Loop Intersection", 42.4494390188529, -72.6826495529067, 
+"Western Loop & Porcupine Trail Intersection", 42.4502084255324, -72.6829101888548, 
+"Eastern Loop & Poplar Hill Rd Intersection",  42.4553147282005, -72.6811261155339,
+"Western Loop & Poplar Hill Rd Intersection",  42.4485464159775, -72.680879902879, 
+"Snowmobile Trail & Poplar Hill Rd Intersection", 42.4510561373434, -72.6805284171786,
+"Snowmobile Trail & Western Loop Intersection",  42.455259960892, -72.6811110967487,
+"Snowmobile Trail & Eastern Loop Intersection", 42.4509711612702, -72.6802923909619)
+cross <- st_as_sf(intersection, coords = c("lon", "lat"), crs = 4326)
+```
+
+```{r message=FALSE}
+#want to create separate, so I'll be able to create menu later
+Driveway <- trailinMac %>%
+  filter(name == 'Driveway')
+Easy_Out <- trailinMac %>%
+  filter(name == 'Easy Out')
+Entry_Trail <- trailinMac %>%
+  filter(name == 'entry trail')
+Vernal_Pool_Loop <- trailinMac %>%
+  filter(name == 'Vernal Pool Loop') 
+Porcupine_Trail <- trailinMac %>%
+  filter(name == 'Porcupine Trail')
+Poplar_Hill_Rd <- trailinMac %>%
+  filter(name == 'Poplar Hill Road')
+Western_Loop <- trailinMac %>%
+  filter(name == 'Western Loop')
+Eastern_Loop <- trailinMac %>%
+  filter(name =='Eastern Loop')
+Snowmobile_Trail <- trailinMac %>%
+  filter(name == 'Snowmobile Trail')
+
+```
+
+
+```{r message=FALSE}
+maptrail <- leaflet() %>%
+  addTiles(group = "Macleish Field Station") %>%
+  
+  #pointing out intersections 
+  addCircles(data = intersection, popup = ~point, group = "Intersections", weight = 5, color = 'black') %>%
+  
+  #pointing out high/low points at macleish
+  addCircles(data = high_point, popup = "High Point: 938 ft", weight = 5, color = 'black', group = "High/Low Points") %>%
+  addCircles(data = low_point, popup = "Low Point: 608 ft", weight = 5, color = 'black', group = "High/Low Points") %>%
+  
+  #trail within Macliesh 
+  addPolylines(data = Driveway,  weight = 3, color = "green", popup = "Driveway", group = "Driveway") %>% 
+  
+  #adding boundary (cuz you wanna just be in Macleish)
+  addPolylines(data = macleish_layers[["boundary"]], weight = 1, color = 'black') %>%
+  
+  #Trail Kiosk (so you know where you wanna go)
+  addMarkers(data = landmarks, popup = "Trail Kiosk", group = "Trail Kiosk") %>%
+  
+  #Separate trails so I can create menu filter later (using the groups)
+  addPolylines(data = Easy_Out, weight = 3, color = 'orange', popup = 'Easy Out, Length: 136.0478 [m]', group = "Exits/Shortcuts") %>%
+  addPolylines(data = Entry_Trail, weight = 3, color = 'blue', popup = 'Entry Trail, Length: 208.1049 [m]', group = "Easy Trails") %>%
+  addPolylines(data = Vernal_Pool_Loop,weight = 3, color = 'violet', popup = 'Vernal Pool Loop, Length: 360.5194 [m]', group = "Easy Trails" ) %>%
+  addPolylines(data = Porcupine_Trail, weight = 3, color = 'red', popup = 'Porcupine Trail, Length: 699.6368 [m]', group = "Easy Trails") %>%
+  addPolylines(data = Poplar_Hill_Rd, weight = 3, color = 'brown', popup = 'Polar Hill Road, Length: 1039.5533 [m]', group = "Moderate Trails") %>%
+  addPolylines(data = Western_Loop, weight = 3, color = 'yellow', popup = 'Western Loop, Length: 1350.6258 [m]', group = "Moderate Trails") %>%
+  addPolylines(data = Eastern_Loop, weight = 3, color = 'purple', popup = 'Eastern Loop, Length: 1940.0986 [m]', group = "Moderate Trails") %>%
+  addPolylines(data = Snowmobile_Trail, weight = 3, color = 'gray', popup = 'Snowmobile Trail, 2575.2168 [m]', group = "Difficult Trails")
+  
+  
+
+
+```
+
+
+```{r message=FALSE, fig.align='center',out.extra='angle=90'}
+#creating menu (Create a menu that allows users to filter trail difficulties (within the trails, there is info on Elevation, trail length and approx time it'll take to walk the trail), Driveway, Easy out (exit/shortcut), and Trail Kiosk)
+maptrail <- maptrail %>% 
+  addLayersControl(
+    baseGroups = c("Macleish Field Station"),
+    overlayGroups = c("Driveway", "Easy Trails","Moderate Trails", "Difficult Trails", "Intersections", "Trail Kiosk", "Exits/Shortcuts", "High/Low Points"),
+    options = layersControlOptions(collapsed = FALSE)
+    )
+maptrail
+```
+
+
+
+```{r}
+
+```
+
+
+
+
+
+
